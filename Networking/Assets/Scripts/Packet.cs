@@ -47,7 +47,25 @@ public class Packet
         readPos += len;
         return val;
     }
-
+    public float GetFloat()
+    {
+        float value = BitConverter.ToSingle(data,readPos);
+        readPos += 4;
+        return value;
+    }
+    public Vector3 GetVector3()
+    {
+        return new Vector3(GetFloat(), GetFloat(), GetFloat());
+    }
+    public Quaternion GetQuaternion()
+    {
+        return new Quaternion(GetFloat(), GetFloat(), GetFloat(), GetFloat());
+    }
+    public void Add(string data)
+    {
+        Add(data.Length);
+        writableData.AddRange(Encoding.ASCII.GetBytes(data));
+    }
     public void Add(byte value) => writableData.Add(value);
     public void Add(byte[] value) => writableData.AddRange(value);
     public void Add(int value) => writableData.AddRange(BitConverter.GetBytes(value));

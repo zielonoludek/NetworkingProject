@@ -30,7 +30,6 @@ public class ClientTCP
         }
         catch (Exception e) { Debug.LogException(e); }
     }
-
     public void CinnectionCallback(IAsyncResult result) 
     {
         socket.EndConnect(result);
@@ -41,7 +40,6 @@ public class ClientTCP
 
         stream.BeginRead(recieveBuffer, 0, dataBufferSize, RecieveCallback, null);
     }
-
     private void RecieveCallback(IAsyncResult result)
     {
         try
@@ -60,5 +58,12 @@ public class ClientTCP
         Packet packet = new(data);
         byte packetID = packet.GetByte();
         GameManager.instance.Handlers[packetID](packet);
+    }
+    public void Disconnect()
+    {
+        stream.Close();
+        socket.Close();
+        stream = null;
+        socket = null;
     }
 }
