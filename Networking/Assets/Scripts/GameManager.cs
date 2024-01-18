@@ -10,6 +10,7 @@ public class GameManager : MonoBehaviour
     public static GameManager instance;
     
     public GameObject playerPrefab;
+    public GameObject localPlayerPrefab;
     public Dictionary<int, Player> PlayerList = new();
 
     // lists for safety we can only instantiate object on main thread
@@ -25,6 +26,8 @@ public class GameManager : MonoBehaviour
         Handlers.Add((byte)PacketID.S_welcome, WelcomeRecieved);
         Handlers.Add((byte)PacketID.S_spawnPlayer, SpawnPlayer);
         Handlers.Add((byte)PacketID.S_playerDisconnected, PlayerDisconnected);
+        Handlers.Add((byte)PacketID.S_playerPosition, PlayerPosition);
+        Handlers.Add((byte)PacketID.S_playerRotation, PlayerRotation);
     }
     private void Update()
     {
@@ -50,7 +53,9 @@ public class GameManager : MonoBehaviour
         Packet welcomeRecieved = new Packet();
         welcomeRecieved.Add((byte)PacketID.C_welcomeReceived);
         welcomeRecieved.Add(yourID);
+        
         Client.instance.tcp.SendData(welcomeRecieved);
+        Client.instance.udp.Connect();
     }
     public void SpawnPlayer(Packet packet) 
     {
@@ -59,12 +64,14 @@ public class GameManager : MonoBehaviour
         Vector3 pos = packet.GetVector3();
         Quaternion rot = packet.GetQuaternion();
 
+        GameObject prefabToSpawn = id == Client.instance.Id ? localPlayerPrefab : playerPrefab; 
+
         lock (actions)
         {
             hasAction = true;
             actions.Add(() =>
             {
-                Player newPlayer = Instantiate(playerPrefab, pos, rot).GetComponent<Player>();
+                Player newPlayer = Instantiate(prefabToSpawn, pos, rot).GetComponent<Player>();
                 newPlayer.name = name;
                 PlayerList.Add(id, newPlayer);
             });
@@ -85,5 +92,22 @@ public class GameManager : MonoBehaviour
                 });
             }
         }
+    }
+    public void PlayerPosition(Packet packet)
+    {
+        int id = packet.GetInt();
+        Vector3 position = packet.GetVector3();
+
+        if (PlayerList.TryGetValue(id,out Player player)) player.targetPosition = position;
+    }
+    public void PlayerRotation(Packet packet)
+    {
+        int id = packet.GetInt();
+
+        if (id == Client.instance.Id) return;
+
+        Quaternion rotation = packet.GetQuaternion();
+
+        if(PlayerList.TryGetValue(id,out Player player)) player.transform.rotation = rotation;
     }
 }

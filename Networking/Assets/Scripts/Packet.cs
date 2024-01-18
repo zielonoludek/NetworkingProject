@@ -16,40 +16,47 @@ public class Packet
         this.data = data;
         packetLength = GetInt();
     }
-    public byte[] ToArray() 
-    { 
+    public byte[] ToArray()
+    {
         writableData.InsertRange(0, BitConverter.GetBytes(writableData.Count));
         return writableData.ToArray();
     }
+    public byte[] ToUdp(int value)
+    {
+        writableData.InsertRange(0, BitConverter.GetBytes(writableData.Count));
+        writableData.InsertRange(0, BitConverter.GetBytes(value));
+        return writableData.ToArray();
+    }
+    public void InsertInt(int value) => writableData.InsertRange(0, BitConverter.GetBytes(value));
     public byte GetByte()
     {
         byte value = data[readPos];
-        readPos += 4;
+        readPos ++;
         return value;
     }
     public byte[] GetBytes(int len)
     {
         byte[] value = new byte[len];
-        Array.Copy(data,readPos,value,0,len);
+        Array.Copy(data, readPos, value, 0, len);
         readPos += len;
         return value;
     }
-    public int GetInt() 
-    { 
-        int value = BitConverter.ToInt32(data,readPos);
+    public int GetInt()
+    {
+        int value = BitConverter.ToInt32(data, readPos);
         readPos += 4;
         return value;
     }
     public string GetString()
     {
         int len = GetInt();
-        string val =  Encoding.ASCII.GetString(data, readPos, len);
+        string val = Encoding.ASCII.GetString(data, readPos, len);
         readPos += len;
         return val;
     }
     public float GetFloat()
     {
-        float value = BitConverter.ToSingle(data,readPos);
+        float value = BitConverter.ToSingle(data, readPos);
         readPos += 4;
         return value;
     }
@@ -69,6 +76,21 @@ public class Packet
     public void Add(byte value) => writableData.Add(value);
     public void Add(byte[] value) => writableData.AddRange(value);
     public void Add(int value) => writableData.AddRange(BitConverter.GetBytes(value));
+    public void Add(float value) => writableData.AddRange(BitConverter.GetBytes(value));
+    public void Add(bool value) => writableData.AddRange(BitConverter.GetBytes(value));
+    public void Add(Vector3 value)
+    {
+        Add(value.x);
+        Add(value.y);   
+        Add(value.z);
+    }
+    public void Add(Quaternion value)
+    {
+        Add(value.x);
+        Add(value.y);
+        Add(value.z);
+        Add(value.w);
+    }
 
     public enum PacketID
     {

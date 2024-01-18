@@ -4,6 +4,7 @@ using static Packet;
 public class Client : MonoBehaviour
 {
     public ClientTCP tcp = new();
+    public ClientUDP udp = new();
     public static Client instance;
 
     public string playerName = "Player1";

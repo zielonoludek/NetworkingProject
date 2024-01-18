@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class ClientTCP
 {
-    private TcpClient socket;
+    public TcpClient socket;
     private NetworkStream stream;
     private byte[] recieveBuffer;
 
