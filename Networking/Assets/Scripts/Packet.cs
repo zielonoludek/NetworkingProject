@@ -3,112 +3,278 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 
+
+public enum PacketId
+{
+    S_Welcome = 1,
+    S_SpawnPlayer = 2,
+    S_PlayerDisconnected = 3,
+    S_PlayerMoveDirection = 4,
+    S_PlayerPosition = 5,
+
+    C_WelcomeReceived = 126,
+    C_Disconnect = 127,
+    C_SpawnPlayer = 128,
+    C_PlayerInput = 129
+}
+
 public class Packet
 {
-    List<byte> writableData = new List<byte>();
-    byte[] data;
-    int readPos = 0;
-    private int packetLength = 0;
+    private readonly List<byte> buffer;
+    private readonly byte[] readableBuffer;
+    private int readPos;
 
-    public Packet() { }
+    /// <summary>Creats an empty packet</summary>
+    public Packet()
+    {
+        buffer = new();
+        readableBuffer = Array.Empty<byte>();
+        readPos = 0;
+    }
+
+    /// <summary>Creats a packet with specifid id</summary>
+    /// <param name="id">The id of the packet</param>
+    public Packet(PacketId id)
+    {
+        buffer = new();
+        readableBuffer = Array.Empty<byte>();
+        readPos = 0;
+        Write((byte)id);
+    }
+
+    /// <summary>Creats a packet with existing data</summary>
+    /// <param name="data">The packet data</param>
     public Packet(byte[] data)
     {
-        this.data = data;
-        packetLength = GetInt();
+        buffer = new();
+        readableBuffer = data;
+        readPos = 0;
     }
+
+    /// <summary>Gets the length of the packet</summary>
+    public int Length { get { return buffer.Count; } }
+
+
+    /// <summary>Converts the packet to a byte array</summary>
+    /// <returns>The packet as a byte[]</returns>
     public byte[] ToArray()
     {
-        writableData.InsertRange(0, BitConverter.GetBytes(writableData.Count));
-        return writableData.ToArray();
+        return buffer.ToArray();
     }
-    public byte[] ToUdp(int value)
+
+    /// <summary>Inserts the given id at the start of the buffer.</summary>
+    /// <param name="clientId">The id to insert.</param>
+    public void InsertInt(int clientId)
     {
-        writableData.InsertRange(0, BitConverter.GetBytes(writableData.Count));
-        writableData.InsertRange(0, BitConverter.GetBytes(value));
-        return writableData.ToArray();
+        buffer.InsertRange(0, BitConverter.GetBytes(clientId)); // Insert the int at the start of the buffer
     }
-    public void InsertInt(int value) => writableData.InsertRange(0, BitConverter.GetBytes(value));
+
+
+    /// <summary>Adds a byte to the packet</summary>
+    /// <param name="value">The byte to add</param>
+    public void Write(byte value)
+    {
+        buffer.Add(value);
+    }
+
+    /// <summary>Adds a byte array to the packet the length of the array will be writen first</summary>
+    /// <param name="value">The byte[] to add</param>
+    public void Write(byte[] value)
+    {
+        Write(value.Length);
+        buffer.AddRange(value);
+    }
+
+    /// <summary>Adds a int to the packet</summary>
+    /// <param name="value">The int to add</param>
+    public void Write(int value)
+    {
+        buffer.AddRange(BitConverter.GetBytes(value));
+    }
+
+    /// <summary>Adds a float to the packet</summary>
+    /// <param name="value">The float to add</param>
+    public void Write(float value)
+    {
+        buffer.AddRange(BitConverter.GetBytes(value));
+    }
+
+    /// <summary>Adds a bool to the packet</summary>
+    /// <param name="value">The bool to add</param>
+    public void Write(bool value)
+    {
+        buffer.AddRange(BitConverter.GetBytes(value));
+    }
+
+    /// <summary>Adds a char to the packet</summary>
+    /// <param name="value">The char to add</param>
+    public void Write(char value)
+    {
+        buffer.Add(Convert.ToByte(value));
+    }
+
+    /// <summary>Adds a string to the packet the length of the string will be writen first</summary>
+    /// <param name="value">The string to add</param>
+    public void Write(string value)
+    {
+        Write(value.Length);
+        buffer.AddRange(Encoding.ASCII.GetBytes(value));
+    }
+
+    /// <summary>Adds a Vector2 to the packet</summary>
+    /// <param name="value">The Vector2 to add</param>
+    public void Write(Vector2 value)
+    {
+        Write(value.x);
+        Write(value.y);
+    }
+
+    /// <summary>Adds a Vector3 to the packet</summary>
+    /// <param name="value">The Vector3 to add</param>
+    public void Write(Vector3 value)
+    {
+        Write(value.x);
+        Write(value.y);
+        Write(value.z);
+    }
+
+    /// <summary>Adds a Quaternion to the packet</summary>
+    /// <param name="value">The Quaternion to add</param>
+    public void Write(Quaternion value)
+    {
+        Write(value.x);
+        Write(value.y);
+        Write(value.z);
+        Write(value.w);
+    }
+
+    /// <summary>Gets a byte from the packet and moves the readPos by 1</summary>
+    /// <returns>The byte read</returns>
     public byte GetByte()
     {
-        byte value = data[readPos];
-        readPos ++;
-        return value;
+        if (readableBuffer.Length > readPos)
+        {
+            byte value = readableBuffer[readPos];
+            readPos += 1;
+            return value;
+        }
+        else
+        {
+            throw new Exception("Could not read value of type 'byte'!");
+        }
     }
-    public byte[] GetBytes(int len)
+
+    /// <summary>Gets a byte array from the packet and moves the readPos by the length of the byte array</summary>
+    /// <returns>The byte[] read</returns>
+    public byte[] GetBytes()
     {
-        byte[] value = new byte[len];
-        Array.Copy(data, readPos, value, 0, len);
-        readPos += len;
-        return value;
+        if (readableBuffer.Length > readPos)
+        {
+            int length = GetInt();
+            byte[] value = new byte[length];
+            Array.Copy(readableBuffer, readPos, value, 0, length);
+            readPos += length;
+            return value;
+        }
+        else
+        {
+            throw new Exception("Could not read value of type 'byte[]'!");
+        }
     }
+
+    /// <summary>Gets a int from the packet and moves the readPos by 4</summary>
+    /// <returns>The int read</returns>
     public int GetInt()
     {
-        int value = BitConverter.ToInt32(data, readPos);
-        readPos += 4;
-        return value;
+        if (readableBuffer.Length > readPos)
+        {
+            int value = BitConverter.ToInt32(readableBuffer, readPos);
+            readPos += 4;
+            return value;
+        }
+        else
+        {
+            throw new Exception("Could not read value of type 'int'!");
+        }
     }
-    public string GetString()
-    {
-        int len = GetInt();
-        string val = Encoding.ASCII.GetString(data, readPos, len);
-        readPos += len;
-        return val;
-    }
+
+    /// <summary>Gets a float from the packet and moves the readPos by 4</summary>
+    /// <returns>The float read</returns>
     public float GetFloat()
     {
-        float value = BitConverter.ToSingle(data, readPos);
-        readPos += 4;
-        return value;
+        if (readableBuffer.Length > readPos)
+        {
+            float value = BitConverter.ToSingle(readableBuffer, readPos);
+            readPos += 4;
+            return value;
+        }
+        else
+        {
+            throw new Exception("Could not read value of type 'float'!");
+        }
     }
+
+    /// <summary>Gets a bool from the packet and moves the readPos by 1</summary>
+    /// <returns>The bool read</returns>
+    public bool GetBool()
+    {
+        if (readableBuffer.Length > readPos)
+        {
+            bool value = BitConverter.ToBoolean(readableBuffer, readPos);
+            readPos += 1;
+            return value;
+        }
+        else
+        {
+            throw new Exception("Could not read value of type 'bool'!");
+        }
+    }
+
+    /// <summary>Gets a char from the packet and moves the readPos by 1</summary>
+    /// <returns>The char read</returns>
+    public char GetChar()
+    {
+        if (readableBuffer.Length > readPos)
+        {
+            char value = BitConverter.ToChar(readableBuffer, readPos);
+            readPos += 1;
+            return value;
+        }
+        else
+        {
+            throw new Exception("Could not read value of type 'char'!");
+        }
+    }
+
+    /// <summary>Gets a string from the packet and moves the readPos by the length of the string</summary>
+    /// <returns>The string read</returns>
+    public string GetString()
+    {
+        if (readableBuffer.Length > readPos)
+        {
+            int length = GetInt();
+            string value = Encoding.ASCII.GetString(readableBuffer, readPos, length);
+            readPos += length;
+            return value;
+        }
+        else
+        {
+            throw new Exception("Could not read value of type 'string'!");
+        }
+    }
+
+    /// <summary>Gets a Vector3 from the packet and moves the readPos by 12</summary>
+    /// <returns>The Vector3 read</returns>
     public Vector3 GetVector3()
     {
         return new Vector3(GetFloat(), GetFloat(), GetFloat());
     }
+
+    /// <summary>Gets a Quaternion from the packet and moves the readPos by 16</summary>
+    /// <returns>The Quaternion read</returns>
     public Quaternion GetQuaternion()
     {
         return new Quaternion(GetFloat(), GetFloat(), GetFloat(), GetFloat());
     }
-    public void Add(string data)
-    {
-        Add(data.Length);
-        writableData.AddRange(Encoding.ASCII.GetBytes(data));
-    }
-    public void Add(byte value) => writableData.Add(value);
-    public void Add(byte[] value) => writableData.AddRange(value);
-    public void Add(int value) => writableData.AddRange(BitConverter.GetBytes(value));
-    public void Add(float value) => writableData.AddRange(BitConverter.GetBytes(value));
-    public void Add(bool value) => writableData.AddRange(BitConverter.GetBytes(value));
-    public void Add(Vector3 value)
-    {
-        Add(value.x);
-        Add(value.y);   
-        Add(value.z);
-    }
-    public void Add(Quaternion value)
-    {
-        Add(value.x);
-        Add(value.y);
-        Add(value.z);
-        Add(value.w);
-    }
-
-    public enum PacketID
-    {
-        S_welcome = 1,
-        S_spawnPlayer = 2,
-        S_playerPosition = 3,
-        S_playerRotation = 4,
-        S_playerShoot = 5,
-        S_playerDisconnected = 6,
-        S_playerHealth = 7,
-        S_playerDead = 8,
-        S_playerRespawned = 9,
-
-
-        C_spawnPlayer = 126,
-        C_welcomeReceived = 127,
-        C_playerMovement = 128,
-        C_playerShoot = 129,
-        C_playerHit = 130,
-    }
 }
+

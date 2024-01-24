@@ -6,9 +6,10 @@ public class ClientTCP
 {
     public TcpClient socket;
     private NetworkStream stream;
-    private byte[] recieveBuffer;
+    private byte[] receiveBuffer;
 
-    public const int dataBufferSize = 4096;
+
+    private const int dataBufferSize = 4096;
 
     public void Connect(string ip, int port)
     {
@@ -18,52 +19,75 @@ public class ClientTCP
             SendBufferSize = dataBufferSize
         };
 
-        recieveBuffer = new byte[dataBufferSize];
-        socket.BeginConnect(ip, port, CinnectionCallback, socket);
+        receiveBuffer = new byte[dataBufferSize];
+        socket.BeginConnect(ip, port, ConnectionCallback, socket);
     }
-    public void SendData(Packet packet) 
+
+    /// <summary>Sends data to the client via TCP.</summary>
+    /// <param name="packet">The packet to send.</param>
+    public void SendData(Packet packet)
     {
-        byte[] packetBytes = packet.ToArray();
         try
         {
-            if (socket != null) stream.BeginWrite(packetBytes, 0, packetBytes.Length, null, null);
+            if (socket != null)
+            {
+                stream.BeginWrite(packet.ToArray(), 0, packet.Length, null, null); // Send data to server
+            }
         }
-        catch (Exception e) { Debug.LogException(e); }
+        catch (Exception ex)
+        {
+            Debug.Log($"Error sending data to server via TCP: {ex}");
+        }
     }
-    public void CinnectionCallback(IAsyncResult result) 
+
+    private void ConnectionCallback(IAsyncResult result)
     {
         socket.EndConnect(result);
 
-        if (!socket.Connected) return;
-        
+        if (!socket.Connected)
+        {
+            return;
+        }
+
         stream = socket.GetStream();
 
-        stream.BeginRead(recieveBuffer, 0, dataBufferSize, RecieveCallback, null);
+        stream.BeginRead(receiveBuffer, 0, dataBufferSize, ReciveCallback, null);
     }
-    private void RecieveCallback(IAsyncResult result)
+    private void ReciveCallback(IAsyncResult result)
     {
+        if (stream == null) { return; }
         try
         {
             int byteLen = stream.EndRead(result);
-            if (byteLen <= 0) return;
+            if (byteLen <= 0)
+            {
+                Disconnect();
+                return;
+            }
+
             byte[] data = new byte[byteLen];
-            Array.Copy(recieveBuffer, data, byteLen);
-            HandleData(data);
-            stream.BeginRead(recieveBuffer, 0, dataBufferSize, RecieveCallback, null);
+            Array.Copy(receiveBuffer, data, byteLen);
+            HandelData(data);
+            stream.BeginRead(receiveBuffer, 0, dataBufferSize, ReciveCallback, null);
         }
-        catch (Exception e) { Debug.LogException(e); }
+        catch
+        {
+            Disconnect();
+        }
     }
-    private void HandleData(byte[] data) 
+
+    private void HandelData(byte[] data)
     {
         Packet packet = new(data);
         byte packetID = packet.GetByte();
-        GameManager.instance.Handlers[packetID](packet);
+        PacketHandlers.Handlers[(PacketId)packetID](packet);
     }
+
     public void Disconnect()
     {
-        stream.Close();
-        socket.Close();
+        Client.instance.Disconnect();
         stream = null;
         socket = null;
+        receiveBuffer = null;
     }
 }

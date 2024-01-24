@@ -1,39 +1,62 @@
 using UnityEngine;
-using static Packet;
 
 public class Client : MonoBehaviour
 {
-    public ClientTCP tcp = new();
-    public ClientUDP udp = new();
     public static Client instance;
 
-    public string playerName = "Player1";
+    public int Id => id;
 
-    public string ip = "127.0.0.1";
-    public int port = 25565;
-    public int Id = 0;
+    private int id = 0;
+
+    [SerializeField] private string ip = "127.0.0.1";
+    [SerializeField] private int port = 25565;
+
+    public ClientTCP tcp;
+    public ClientUDP udp;
+
+    private bool isConnected = false;
 
     private void Awake()
     {
-        if (instance == null) instance = this;
-        else if (instance != this) Destroy(this);
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else if (instance != this)
+        {
+            Debug.Log("Instance already exists, destroying myself!");
+            Destroy(this);
+        }
     }
-    public void JoinGame()
+
+    /// <summary>Attempts to connect to the server.</summary>
+    public void ConnectToServer()
     {
-        Packet packet = new Packet();
-        packet.Add((byte)Packet.PacketID.C_spawnPlayer);
-        packet.Add(playerName);
-        tcp.SendData(packet);
+        tcp = new();
+        udp = new(ip, port);
+
+        isConnected = true;
+        tcp.Connect(ip, port); // Connect tcp, udp gets connected once tcp is done
     }
-    public void SetName(string name) => playerName = name;
-    public void Connect() => tcp.Connect(ip, port);
+    public void SetId(int id)
+    {
+        this.id = id;
+        udp.Connect();
+    }
     public void Disconnect()
     {
-        tcp.Disconnect();
-        if (GameManager.instance.PlayerList.TryGetValue(Id, out Player player))
+        if (isConnected)
         {
-            GameManager.instance.PlayerList.Remove(Id);
-            Destroy(player.gameObject);
+            isConnected = false;
+            tcp.socket.Close();
+            udp.socket.Close();
+            GameManger.instance.DisconnectPlayer(Id);
         }
+    }
+
+
+    private void OnApplicationQuit()
+    {
+        Disconnect(); // Disconnect when the game is closed
     }
 }

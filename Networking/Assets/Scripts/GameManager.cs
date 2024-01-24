@@ -1,113 +1,67 @@
 using System.Collections.Generic;
 using UnityEngine;
-using System;
-using static Packet;
 
-public class GameManager : MonoBehaviour
+public class GameManger : MonoBehaviour
 {
-    public Dictionary<byte, PacketHandle> Handlers = new();
-    public delegate void PacketHandle(Packet packet);
-    public static GameManager instance;
-    
-    public GameObject playerPrefab;
-    public GameObject localPlayerPrefab;
-    public Dictionary<int, Player> PlayerList = new();
+    public static GameManger instance;
 
-    // lists for safety we can only instantiate object on main thread
-    public List<Action> actions = new();
-    public List<Action> actionsCopy = new();
-    bool hasAction = false;
+    [SerializeField] private GameObject playerPrefab;
+    [SerializeField] private GameObject localPlayerPrefab;
+
+    private readonly Dictionary<int, Player> PlayerList = new();
+
+    private string userName = "Player";
+    public void SetUserName(string userName) => this.userName = userName;
 
     private void Awake()
     {
-        if (instance == null) instance = this;
-        else if (instance != this) Destroy(this);
-
-        Handlers.Add((byte)PacketID.S_welcome, WelcomeRecieved);
-        Handlers.Add((byte)PacketID.S_spawnPlayer, SpawnPlayer);
-        Handlers.Add((byte)PacketID.S_playerDisconnected, PlayerDisconnected);
-        Handlers.Add((byte)PacketID.S_playerPosition, PlayerPosition);
-        Handlers.Add((byte)PacketID.S_playerRotation, PlayerRotation);
-    }
-    private void Update()
-    {
-        if (hasAction)
+        if (instance == null)
         {
-            actionsCopy.Clear();
-            lock(actions)
-            {
-                actionsCopy.AddRange(actions);
-                actions.Clear();
-                hasAction = false;
-            }
+            instance = this;
+        }
+        else if (instance != this)
+        {
+            Debug.Log("Instance already exists, destroying object!");
+            Destroy(this);
+        }
 
-            foreach (Action action in actionsCopy) action.Invoke();
+    }
+
+    public void JoinGame()
+    {
+        Packet packet = new(PacketId.C_SpawnPlayer);
+        packet.Write(userName);
+        Client.instance.tcp.SendData(packet);
+    }
+
+
+    public void SpawnPlayer(int id, string name, Vector3 pos, Quaternion rot)
+    {
+        GameObject prefabToSpawn = id == Client.instance.Id ? localPlayerPrefab : playerPrefab;
+        Player newPlayer = Instantiate(prefabToSpawn, pos, rot).GetComponent<Player>();
+        newPlayer.name = name;
+        PlayerList.Add(id, newPlayer);
+    }
+    public void DisconnectPlayer(int id)
+    {
+        if (PlayerList.TryGetValue(id, out Player player))
+        {
+            PlayerList.Remove(id);
+            Destroy(player.gameObject);
         }
     }
-    public void WelcomeRecieved(Packet packet) 
+    public void SetPlayerMoveDirection(Vector3 direction)
     {
-        string msg = packet.GetString();
-        int yourID = packet.GetInt();
-        Debug.Log(msg);
-
-        Packet welcomeRecieved = new Packet();
-        welcomeRecieved.Add((byte)PacketID.C_welcomeReceived);
-        welcomeRecieved.Add(yourID);
-        
-        Client.instance.tcp.SendData(welcomeRecieved);
-        Client.instance.udp.Connect();
-    }
-    public void SpawnPlayer(Packet packet) 
-    {
-        int id = packet.GetInt();
-        string name = packet.GetString();
-        Vector3 pos = packet.GetVector3();
-        Quaternion rot = packet.GetQuaternion();
-
-        GameObject prefabToSpawn = id == Client.instance.Id ? localPlayerPrefab : playerPrefab; 
-
-        lock (actions)
+        if (PlayerList.TryGetValue(Client.instance.Id, out Player player))
         {
-            hasAction = true;
-            actions.Add(() =>
-            {
-                Player newPlayer = Instantiate(prefabToSpawn, pos, rot).GetComponent<Player>();
-                newPlayer.name = name;
-                PlayerList.Add(id, newPlayer);
-            });
+            player.targetPosition = direction;
         }
     }
-    public void PlayerDisconnected(Packet packet)
+    public void SetPlayerPosition(int id, Vector3 position, Quaternion rotation)
     {
-        int id = packet.GetInt();
-        if(PlayerList.TryGetValue(id, out Player player))
+        if (PlayerList.TryGetValue(id, out Player player))
         {
-            lock (actions)
-            {
-                hasAction = true;
-                actions.Add(() =>
-                {
-                    PlayerList.Remove(id);
-                    Destroy(player.gameObject);
-                });
-            }
+            player.transform.SetPositionAndRotation(position, rotation);
         }
-    }
-    public void PlayerPosition(Packet packet)
-    {
-        int id = packet.GetInt();
-        Vector3 position = packet.GetVector3();
-
-        if (PlayerList.TryGetValue(id,out Player player)) player.targetPosition = position;
-    }
-    public void PlayerRotation(Packet packet)
-    {
-        int id = packet.GetInt();
-
-        if (id == Client.instance.Id) return;
-
-        Quaternion rotation = packet.GetQuaternion();
-
-        if(PlayerList.TryGetValue(id,out Player player)) player.transform.rotation = rotation;
     }
 }
